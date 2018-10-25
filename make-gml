@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+version = '1.0 (2017-01-19)'
+
+import argparse
+from sys import exit
+
+parser = argparse.ArgumentParser(description='Convert association text file to GraphML format')
+parser.add_argument('-v', '--version', action='version', version='%(prog)s {0}'.format(version))
+parser.add_argument('-r', '--allow-reciprocal', dest='reciprocal', action='store_true', default=False, help='allow reciprocal edges')
+parser.add_argument('-a', '--graph-name', dest='graph_name', type=str, default='G', help='graph name')
+parser.add_argument('-p', '--node-prefix', dest='node_prefix', type=str, default='', help='node prefix string')
+parser.add_argument(dest='input_file', metavar='<file>', help='input association file')
+args = parser.parse_args()
+
+connections = {}
+
+def addEdge(n1, n2):
+    if n1 not in connections.keys(): connections[n1] = set()
+    if n1 == n2: return
+    if n2 is not None:
+        if n2 not in connections.keys(): connections[n2] = set()
+        if (n1 in connections[n2]) and (args.reciprocal is False): return
+        connections[n1].add(n2)
+
+def sortNodeSet(n):
+    nodes = list(n)
+    try: nodes.sort(key=int)
+    except: nodes.sort()
+    return nodes
+
+with open(args.input_file, 'rt') as input_file:
+    for line in input_file.readlines():
+        line = line.strip()
+        line_data = line.split(':')
+        if len(line_data) != 2:
+            print('ERROR: incorrect format for line "{}"'.format(line))
+            exit(1)
+        n1 = line_data[0]
+        # in_nodes = line_data[1].split(',')
+        in_nodes = list(filter(lambda x:x != '', line_data[1].split(',')))
+        if len(in_nodes) == 0:
+            addEdge(n1, None)
+        else:
+            for n2 in in_nodes:
+                addEdge(n1, n2)
+
+# Output the graph in GML format:
+print('<?xml version="1.0" encoding="UTF-8"?>')
+print('<graphml xmlns="http://graphml.graphdrawing.org/xmlns"\n  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns\n  http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">')
+print('  <graph id="{}" edgedefault="undirected">'.format(args.graph_name))
+out_nodes = sortNodeSet(connections.keys())
+for n in out_nodes:
+    print('    <node id="{}{}" />'.format(args.node_prefix, n))
+for n1 in out_nodes:
+    in_nodes = sortNodeSet(connections[n1])
+    for n2 in in_nodes:
+        print('    <edge source="{}{}" target="{}{}" />'.format(args.node_prefix, n1, args.node_prefix, n2))
+print('  </graph>')
+print('</graphml>')
